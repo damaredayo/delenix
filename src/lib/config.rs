@@ -11,6 +11,7 @@ pub struct Config {
     pub last_index: u32,
     pub copy_to_clipboard: bool,
     pub copy_url_to_clipboard: bool,
+    pub freeze_screen: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -121,6 +122,7 @@ impl Default for Config {
             last_index: 0,
             copy_to_clipboard: true,
             copy_url_to_clipboard: false,
+            freeze_screen: true,
         }
     }
 }

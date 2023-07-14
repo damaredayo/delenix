@@ -37,7 +37,7 @@ pub fn as_jpeg(
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ScreenshotType {
-    Region(i16, i16, u16, u16), // x, y, width, height
+    Region(RegionSelection), // x, y, width, height
 
     #[cfg(target_os = "linux")]
     Window(x11rb::protocol::xproto::Window),
@@ -52,10 +52,10 @@ impl Config {
     pub fn screenshot(&self, typ: ScreenshotType) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         match self.screenshotter {
             None => match typ {
-                ScreenshotType::Region(x, y, w, h) => {
-                    let data = capture_region(x, y, w, h)?;
+                ScreenshotType::Region(selection) => {
+                    let data = capture_region(&selection)?;
 
-                    Ok(as_png(data, w, h)?)
+                    Ok(as_png(data, selection.w, selection.h)?)
                 }
                 ScreenshotType::Window(window) => {
                     let (data, (w, h)) = capture_window(window)?;
@@ -99,9 +99,11 @@ mod linux {
     use std::sync::{Arc, RwLock};
 
     use gdk::CursorType;
+    use gdk_pixbuf::PixbufLoader;
+    use serde_derive::{Deserialize, Serialize};
     use x11rb::connection::Connection;
     use x11rb::errors::ReplyOrIdError;
-    use x11rb::protocol::xproto::{self, ConnectionExt, InternAtomReply, Window};
+    use x11rb::protocol::xproto::{self, ConnectionExt, InternAtomReply, Window, GetGeometryReply};
     use x11rb::rust_connection::RustConnection;
 
     // Function to get the root window of the X11 display
@@ -129,13 +131,69 @@ mod linux {
         success: bool,
     }
 
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    pub struct RegionSelection {
+        pub x: i16,
+        pub y: i16,
+        pub w: u16,
+        pub h: u16,
+
+        #[serde(skip_serializing, skip_deserializing)]
+        pub pixbuf: Option<gdk_pixbuf::Pixbuf>
+    }
+
+    // we never access pixbuf from another thread, so it's safe.
+    unsafe impl Send for RegionSelection {}
+
+    impl From<GetGeometryReply> for RegionSelection {
+        fn from(reply: GetGeometryReply) -> Self {
+            Self {
+                x: reply.x,
+                y: reply.y,
+                w: reply.width,
+                h: reply.height,
+                pixbuf: None
+            }
+        }
+    }
+
     // Function to capture a region of the screen specified by coordinates (x, y, width, height)
     pub fn capture_region(
-        x: i16,
-        y: i16,
-        width: u16,
-        height: u16,
+        selection: &RegionSelection
     ) -> Result<Vec<u8>, ReplyOrIdError> {
+
+        // if we already have a pixbuf, likely from freeze, we should use that
+        if let Some(pixbuf) = &selection.pixbuf {
+            let region_pixbuf = pixbuf.new_subpixbuf(
+                selection.x as i32,
+                selection.y as i32,
+                selection.w as i32,
+                selection.h as i32
+            );
+
+            // Get the image dimensions
+            let width = region_pixbuf.width();
+            let height = region_pixbuf.height();
+
+            // Determine the color components and depth
+            let n_channels = region_pixbuf.n_channels() as usize;
+            let row_stride = region_pixbuf.rowstride() as usize;
+
+            // Get the pixel data
+            let pixels = unsafe { region_pixbuf.pixels() };
+
+            // Convert the pixel data to a raw image buffer
+            let mut raw_image = vec![0u8; width as usize * height as usize * n_channels];
+            for y in 0..height as usize {
+                let src_offset = y * row_stride;
+                let dst_offset = y * width as usize * n_channels;
+                let row_data = &pixels[src_offset..src_offset + width as usize * n_channels];
+                raw_image[dst_offset..dst_offset + width as usize * n_channels].copy_from_slice(row_data);
+            }
+
+            return Ok(raw_image);
+        }
+
         let (connection, _screen_num) =
             RustConnection::connect(None).expect("Failed to connect to X server");
         let root_window = get_root_window(&connection)?;
@@ -143,10 +201,10 @@ mod linux {
         let get_image_cookie = connection.get_image(
             xproto::ImageFormat::Z_PIXMAP,
             root_window,
-            x,
-            y,
-            width,
-            height,
+            selection.x,
+            selection.y,
+            selection.w,
+            selection.h,
             std::u32::MAX,
         )?;
 
@@ -169,7 +227,7 @@ mod linux {
     }
 
     // this function should dim the screen, then give the user a drag cursor to select a region
-    pub fn select_region() -> Result<(i16, i16, u16, u16), Box<dyn std::error::Error>> {
+    pub fn select_region(freeze: bool) -> Result<RegionSelection, Box<dyn std::error::Error>> {
         use gdk::Cursor;
         use gtk::prelude::*;
         use gtk::{Window, WindowPosition, WindowType};
@@ -193,7 +251,7 @@ mod linux {
         window.set_app_paintable(true);
 
         let screen =
-            gtk::prelude::GtkWindowExt::screen(window.as_ref()).ok_or("Failed to get screen")?;
+        gtk::prelude::GtkWindowExt::screen(window.as_ref()).ok_or("Failed to get screen")?;
         let visual = screen.rgba_visual().ok_or("Failed to get RGBA visual")?;
         window.set_visual(Some(&visual));
 
@@ -214,8 +272,31 @@ mod linux {
             success: false,
         }));
 
+        let mut pixbuf: Arc<Option<gdk_pixbuf::Pixbuf>> = Arc::new(None);
+
+        if freeze {
+            let (data, (w, h)) =  capture_screen()?;
+
+            let data = crate::screenshot::as_png(data, w, h)?;
+
+            let loader = PixbufLoader::new();
+            loader.write(&data)?;
+            loader.close()?;
+
+            pixbuf = Arc::new(loader.pixbuf());
+        }
+
         let drag_data_ref = Arc::clone(&drag_data);
+        let pixbuf_ref = Arc::clone(&pixbuf);
         drawing_area.connect_draw(move |_, cr| {
+            // if freeze, draw the frozen screen
+            if freeze {
+                cr.set_source_pixbuf(&pixbuf_ref.as_ref().clone().unwrap(), 0.0, 0.0);
+                if let Err(e) = cr.paint() {
+                    println!("Error painting freeze screen: {}", e);
+                }
+            }
+
             // Create a transparent overlay
             cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
             if let Err(e) = cr.paint() {
@@ -318,7 +399,6 @@ mod linux {
 
         window.show_all();
 
-        // Run the GTK main loop until the user finishes selecting a region
         gtk::main();
 
         // Calculate the coordinates and dimensions of the selected region
@@ -327,14 +407,14 @@ mod linux {
             return Err("User cancelled region selection".into());
         }
 
-        let (x, y, width, height) = (
+        let (x, y, w, h) = (
             i16::min(drag_data.start_pos.0, drag_data.end_pos.0),
             i16::min(drag_data.start_pos.1, drag_data.end_pos.1),
             (drag_data.start_pos.0 - drag_data.end_pos.0).abs() as u16,
             (drag_data.start_pos.1 - drag_data.end_pos.1).abs() as u16,
         );
 
-        Ok((x, y, width, height))
+        Ok(RegionSelection { x, y, w, h, pixbuf: Some(pixbuf.as_ref().clone().unwrap())})
     }
 
     pub fn get_active_window_id() -> Result<Option<Window>, ReplyOrIdError> {
@@ -380,12 +460,7 @@ mod linux {
         let get_geometry_cookie = connection.get_geometry(window_id)?;
         let get_geometry_reply = get_geometry_cookie.reply()?;
 
-        let capture = capture_region(
-            get_geometry_reply.x,
-            get_geometry_reply.y,
-            get_geometry_reply.width,
-            get_geometry_reply.height,
-        )?;
+        let capture = capture_region(&get_geometry_reply.into())?;
 
         Ok((
             capture,

@@ -1,3 +1,5 @@
+use std::{thread, time};
+
 use delenix_lib::{clipboard, config, screenshot, util};
 use structopt::StructOpt;
 
@@ -86,9 +88,10 @@ fn main() {
 
     if opt.screenshot {
         tracing::info!("Taking screenshot");
-        let (x, y, w, h) = delenix_lib::screenshot::select_region().unwrap();
+        let rs = delenix_lib::screenshot::select_region(config.freeze_screen).unwrap();
+        thread::sleep(time::Duration::from_millis(30)); // this is a hack to fix the screenshot sometimes displaying the dim and selection rectangle
         let png = config
-            .screenshot(screenshot::ScreenshotType::Region(x, y, w, h))
+            .screenshot(screenshot::ScreenshotType::Region(rs))
             .unwrap();
 
         if config.copy_to_clipboard {
