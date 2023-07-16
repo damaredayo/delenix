@@ -20,6 +20,7 @@ Please note that at this moment in time, Linux is the only supported platform, b
 - [ ] MP4 recording
 - [ ] GUI for configuring the application (the concept of which would be inspired by ShareX)
 - [ ] Compatibility with ShareX configuration files (for easy migration)
+- [x] OCR Support for text in screenshots
 
 There are also some other features that are planned to be implemented, but are not yet listed here because they are not yet fully designed or I just forgot about them. Please feel free to open an issue if you have any suggestions or ideas, or even code improvements. I would love to see them! :)
 

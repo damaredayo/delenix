@@ -12,6 +12,7 @@ pub struct Config {
     pub copy_to_clipboard: bool,
     pub copy_url_to_clipboard: bool,
     pub freeze_screen: bool,
+    pub tessdata_path: Option<String>
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -123,6 +124,12 @@ impl Default for Config {
             copy_to_clipboard: true,
             copy_url_to_clipboard: false,
             freeze_screen: true,
+
+            #[cfg(target_os = "linux")]
+            tessdata_path: Some("/usr/share/tessdata/".to_string()),
+
+            #[cfg(target_os = "windows")]
+            tessdata_path: Some("C:\\Program Files\\Tesseract-OCR\\tessdata".to_string()),
         }
     }
 }

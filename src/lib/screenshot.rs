@@ -103,7 +103,7 @@ mod linux {
     use serde_derive::{Deserialize, Serialize};
     use x11rb::connection::Connection;
     use x11rb::errors::ReplyOrIdError;
-    use x11rb::protocol::xproto::{self, ConnectionExt, InternAtomReply, Window, GetGeometryReply};
+    use x11rb::protocol::xproto::{self, ConnectionExt, GetGeometryReply, InternAtomReply, Window};
     use x11rb::rust_connection::RustConnection;
 
     // Function to get the root window of the X11 display
@@ -139,7 +139,7 @@ mod linux {
         pub h: u16,
 
         #[serde(skip_serializing, skip_deserializing)]
-        pub pixbuf: Option<gdk_pixbuf::Pixbuf>
+        pub pixbuf: Option<gdk_pixbuf::Pixbuf>,
     }
 
     // we never access pixbuf from another thread, so it's safe.
@@ -152,23 +152,20 @@ mod linux {
                 y: reply.y,
                 w: reply.width,
                 h: reply.height,
-                pixbuf: None
+                pixbuf: None,
             }
         }
     }
 
     // Function to capture a region of the screen specified by coordinates (x, y, width, height)
-    pub fn capture_region(
-        selection: &RegionSelection
-    ) -> Result<Vec<u8>, ReplyOrIdError> {
-
+    pub fn capture_region(selection: &RegionSelection) -> Result<Vec<u8>, ReplyOrIdError> {
         // if we already have a pixbuf, likely from freeze, we should use that
         if let Some(pixbuf) = &selection.pixbuf {
             let region_pixbuf = pixbuf.new_subpixbuf(
                 selection.x as i32,
                 selection.y as i32,
                 selection.w as i32,
-                selection.h as i32
+                selection.h as i32,
             );
 
             // Get the image dimensions
@@ -188,7 +185,8 @@ mod linux {
                 let src_offset = y * row_stride;
                 let dst_offset = y * width as usize * n_channels;
                 let row_data = &pixels[src_offset..src_offset + width as usize * n_channels];
-                raw_image[dst_offset..dst_offset + width as usize * n_channels].copy_from_slice(row_data);
+                raw_image[dst_offset..dst_offset + width as usize * n_channels]
+                    .copy_from_slice(row_data);
             }
 
             return Ok(raw_image);
@@ -251,7 +249,7 @@ mod linux {
         window.set_app_paintable(true);
 
         let screen =
-        gtk::prelude::GtkWindowExt::screen(window.as_ref()).ok_or("Failed to get screen")?;
+            gtk::prelude::GtkWindowExt::screen(window.as_ref()).ok_or("Failed to get screen")?;
         let visual = screen.rgba_visual().ok_or("Failed to get RGBA visual")?;
         window.set_visual(Some(&visual));
 
@@ -275,7 +273,7 @@ mod linux {
         let mut pixbuf: Arc<Option<gdk_pixbuf::Pixbuf>> = Arc::new(None);
 
         if freeze {
-            let (data, (w, h)) =  capture_screen()?;
+            let (data, (w, h)) = capture_screen()?;
 
             let data = crate::screenshot::as_png(data, w, h)?;
 
@@ -414,7 +412,13 @@ mod linux {
             (drag_data.start_pos.1 - drag_data.end_pos.1).abs() as u16,
         );
 
-        Ok(RegionSelection { x, y, w, h, pixbuf: Some(pixbuf.as_ref().clone().unwrap())})
+        Ok(RegionSelection {
+            x,
+            y,
+            w,
+            h,
+            pixbuf: Some(pixbuf.as_ref().clone().unwrap()),
+        })
     }
 
     pub fn get_active_window_id() -> Result<Option<Window>, ReplyOrIdError> {

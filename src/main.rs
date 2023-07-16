@@ -1,6 +1,6 @@
 use std::{thread, time};
 
-use delenix_lib::{clipboard, config, screenshot, util};
+use delenix_lib::{clipboard, config, ocr, screenshot, util};
 use structopt::StructOpt;
 
 mod ipc;
@@ -25,6 +25,13 @@ struct Cli {
         help = "Take a full screen screenshot"
     )]
     screenshot: bool,
+
+    #[structopt(
+        short = "t",
+        long = "tesseract",
+        help = "Get the text from the screenshot and copy to clipboard, requires -s/--screenshot or -f/--file"
+    )]
+    tesseract: bool,
 
     #[structopt(
         short = "u",
@@ -78,21 +85,37 @@ fn main() {
     }
 
     if opt.upload {
-        if let Some(path) = opt.file {
+        if let Some(ref path) = opt.file {
             let data = std::fs::read(&path).unwrap();
             util::handle_simple_upload(&config, &data);
         } else {
             tracing::error!("No file specified to upload");
         }
+
+        return;
+    }
+
+    if opt.file.is_some() && opt.tesseract {
+        tracing::info!("Getting text from file");
+        let data = std::fs::read(opt.file.unwrap()).unwrap();
+
+        let text = ocr::ocr(&config.tessdata_path, &data).unwrap();
+        clipboard::copy_text_to_clipboard(&text).unwrap();
+        return;
     }
 
     if opt.screenshot {
         tracing::info!("Taking screenshot");
-        let rs = delenix_lib::screenshot::select_region(config.freeze_screen).unwrap();
+        let rs = screenshot::select_region(config.freeze_screen).unwrap();
         thread::sleep(time::Duration::from_millis(30)); // this is a hack to fix the screenshot sometimes displaying the dim and selection rectangle
         let png = config
             .screenshot(screenshot::ScreenshotType::Region(rs))
             .unwrap();
+
+
+        if opt.tesseract {
+            println!("{}", ocr::ocr(&config.tessdata_path, &png).unwrap());
+        }
 
         if config.copy_to_clipboard {
             clipboard::copy_png_to_clipboard(&png).unwrap();
