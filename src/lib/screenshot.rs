@@ -291,17 +291,11 @@ mod linux {
             if freeze {
                 cr.set_source_pixbuf(&pixbuf_ref.as_ref().clone().unwrap(), 0.0, 0.0);
                 if let Err(e) = cr.paint() {
-                    println!("Error painting freeze screen: {}", e);
+                    tracing::error!("Error painting freeze screen: {}", e);
                 }
             }
 
-            // Create a transparent overlay
-            cr.set_source_rgba(0.0, 0.0, 0.0, 0.5);
-            if let Err(e) = cr.paint() {
-                println!("Error painting overlay: {}", e);
-            }
-
-            let drag_data = drag_data_ref.write().unwrap();
+            let drag_data = drag_data_ref.read().unwrap();
 
             // Draw the selection rectangle
             if drag_data.dragging {
@@ -311,10 +305,14 @@ mod linux {
                     (drag_data.start_pos.0 - drag_data.end_pos.0).abs() as u16,
                     (drag_data.start_pos.1 - drag_data.end_pos.1).abs() as u16,
                 );
+
                 cr.set_source_rgba(1.0, 1.0, 1.0, 1.0);
                 cr.rectangle(x as f64, y as f64, width as f64, height as f64);
+                cr.set_line_width(1.0);
+                cr.set_dash(&[6.0, 2.0], 0.0);
+
                 if let Err(e) = cr.stroke() {
-                    println!("Error drawing rectangle: {}", e);
+                    tracing::error!("Error drawing selection rectangle: {}", e);
                 }
             }
 
