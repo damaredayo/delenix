@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use serde_derive::{Deserialize, Serialize};
 
-use crate::screenshot;
+use crate::{screenshot, util::make_default_image_path};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
@@ -22,20 +22,40 @@ pub enum Uploader {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DestinationType {
+    None,
+    ImageUploader,
+    TextUploader,
+    FileUploader,
+    URLShortener,
+    URLSharingService,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Body {
+    None,
+    MultipartFormData,
+    FormURLEncoded,
+    JSON,
+    XML,
+    Binary,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HttpUploader {
     pub name: String,
-    pub destination_type: String,
+    pub destination_type: DestinationType,
     pub request_method: String,
     pub request_url: String,
-    pub parameters: HashMap<String, String>,
-    pub headers: HashMap<String, String>,
-    pub body: String,
-    pub arguments: HashMap<String, String>,
-    pub file_form_name: String,
+    pub parameters: Option<HashMap<String, String>>,
+    pub headers: Option<HashMap<String, String>>,
+    pub body: Body,
+    pub arguments: Option<HashMap<String, String>>,
+    pub file_form_name: Option<String>,
+
     pub url: String,
-    pub thumbnail_url: String,
-    pub deletion_url: String,
-    pub error_message: String,
+    pub thumbnail_url: Option<String>,
+    pub deletion_url: Option<String>,
+    pub error_message: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -52,15 +72,15 @@ impl Uploader {
             destination_type: c.destination_type,
             request_method: c.request_method,
             request_url: c.request_url,
-            parameters: c.parameters,
-            headers: c.headers,
+            parameters: Some(c.parameters),
+            headers: Some(c.headers),
             body: c.body,
-            arguments: c.arguments,
-            file_form_name: c.file_form_name,
+            arguments: Some(c.arguments),
+            file_form_name: Some(c.file_form_name),
             url: c.url,
-            thumbnail_url: c.thumbnail_url,
-            deletion_url: c.deletion_url,
-            error_message: c.error_message,
+            thumbnail_url: Some(c.thumbnail_url),
+            deletion_url: Some(c.deletion_url),
+            error_message: Some(c.error_message),
         })
     }
 }
@@ -113,12 +133,43 @@ impl Config {
 
 impl Default for Config {
     fn default() -> Self {
+        // Default config consists of uploading to imgur and saving to a a file located at ~/Screenshots
+
+        let args: HashMap<String, String> = [("type", "file")]
+            .iter()
+            .map(|&(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        let headers: HashMap<String, String> = [("Authorization", "Client-ID 8c964e2b2514a95")]
+            .iter()
+            .map(|&(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
         Self {
-            uploaders: vec![Uploader::File(FileUploader {
-                name: "File".to_string(),
-                file_path: "/home/tyler/pic".to_string(),
-                file_name: "screenshot".to_string(),
-            })],
+            uploaders: vec![
+                Uploader::File(FileUploader {
+                    name: "File".to_string(),
+                    file_path: make_default_image_path(),
+                    file_name: "%r12".to_string(),
+                }),
+                Uploader::HTTP(HttpUploader {
+                    name: "imgur".to_string(),
+                    destination_type: DestinationType::ImageUploader,
+                    request_method: "POST".to_string(),
+                    request_url: "https://api.imgur.com/3/image".to_string(),
+                    parameters: None,
+                    headers: Some(headers),
+                    body: Body::MultipartFormData,
+                    arguments: Some(args),
+                    file_form_name: Some("image".to_string()),
+                    url: "$json:data.link$".to_string(),
+                    thumbnail_url: None,
+                    deletion_url: Some(
+                        "http://imgur.com/delete/$json:data.deletehash$".to_string(),
+                    ),
+                    error_message: None,
+                }),
+            ],
             screenshotter: None,
             last_index: 0,
             copy_to_clipboard: true,
@@ -142,12 +193,12 @@ mod sharex {
     #[serde(rename_all = "PascalCase")]
     pub struct Config {
         pub name: String,
-        pub destination_type: String,
+        pub destination_type: crate::config::DestinationType,
         pub request_method: String,
         pub request_url: String,
         pub parameters: HashMap<String, String>,
         pub headers: HashMap<String, String>,
-        pub body: String,
+        pub body: crate::config::Body,
         pub arguments: HashMap<String, String>,
         pub file_form_name: String,
         pub url: String,

@@ -1,9 +1,11 @@
 use std::iter;
 
 use chrono::{Datelike, Timelike, Utc};
+use jsonpath_lib::Selector;
 use lazy_static::lazy_static;
 use rand::Rng;
 use regex::Regex;
+use serde_json::Value;
 
 use crate::{
     config::{self, Config},
@@ -87,18 +89,35 @@ pub fn make_default_config_path() -> String {
         .to_string()
 }
 
+pub fn make_default_image_path() -> String {
+    home::home_dir()
+        .unwrap()
+        .join("Screenshots")
+        .to_str()
+        .unwrap()
+        .to_string()
+}
+
 pub fn handle_simple_upload(config: &config::Config, data: &[u8]) {
     tracing::info!("Uploading file");
     match upload::upload(config, data, "png") {
         Ok(results) => {
             for result in results {
-                match result.uploader {
-                    config::Uploader::HTTP(_) => {
-                        tracing::info!("Uploaded to {}", result.location);
-                    }
-                    config::Uploader::File(_) => {
-                        tracing::info!("Saved to {}", result.location);
-                    }
+                if result.error_message.is_some() {
+                    tracing::error!("Failed to upload: {}", result.error_message.unwrap());
+                    continue;
+                }
+
+                if result.url.is_some() {
+                    tracing::info!("Uploaded URL: {}", result.url.unwrap());
+                }
+
+                if result.deletion_url.is_some() {
+                    tracing::info!("Delete URL: {}", result.deletion_url.unwrap());
+                }
+
+                if result.file_path.is_some() {
+                    tracing::info!("File path: {}", result.file_path.unwrap());
                 }
             }
         }
@@ -106,6 +125,42 @@ pub fn handle_simple_upload(config: &config::Config, data: &[u8]) {
             tracing::error!("Failed to upload: {}", e);
         }
     }
+}
+
+lazy_static! {
+    static ref JSON_PATH_REGEX: Regex = Regex::new(r"\$json:([^{}]+)\$").unwrap();
+}
+
+pub fn parse_custom_syntax(
+    input: &str,
+    json_response: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let parsed_response = JSON_PATH_REGEX.replace_all(input, |captures: &regex::Captures<'_>| {
+        let json_path = captures.get(1).unwrap().as_str();
+        match evaluate_json_path(json_response, json_path) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("Error while parsing JSON path syntax: {}", e);
+                String::new()
+            }
+        }
+    });
+
+    // Remove the square brackets and quotes from the parsed response
+    let cleaned_response = parsed_response
+        .as_ref()
+        .replace("[\"", "")
+        .replace("\"]", "");
+
+    Ok(cleaned_response)
+}
+
+fn evaluate_json_path(json: &str, path: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let value: Value = serde_json::from_str(json)?;
+    Ok(Selector::new()
+        .value(&value)
+        .str_path(format!("$.{}", path).as_str())?
+        .select_as_str()?)
 }
 
 #[macro_export]

@@ -15,7 +15,7 @@ Please note that at this moment in time, Linux is the only supported platform, b
 - [x] Saving screenshots to disk
 - [x] Saving screenshots to clipboard after taking them
 - [ ] Daemon mode (running in the background and taking screenshots on keypress, configurable and for use with the GUI, currently still in semi-design phase)
-- [ ] Uploading screenshots to custom destinations (the framework and such is already implemented, but actually making the requests is not yet implemented)
+- [x] Uploading screenshots to custom destinations (the framework and such is already implemented, but actually making the requests is not yet implemented)
 - [ ] GIF recording
 - [ ] MP4 recording
 - [ ] GUI for configuring the application (the concept of which would be inspired by ShareX)
