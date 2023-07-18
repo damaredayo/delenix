@@ -34,7 +34,15 @@ After you have Rust installed, you can clone the repository and build the projec
 cargo build --release
 ```
 
-The binary will be located in `target/release/delenix`.
+If you wish to have OCR support (which is disabled by default), you will need to install the Tesseract OCR engine and the corresponding language data. You can find instructions on how to do that [here](https://tesseract-ocr.github.io/tessdoc/Installation.html). After you have installed Tesseract, you can enable OCR support by running the following command:
+
+```bash
+cargo build --release --features tesseract
+```
+
+Note that all prebuilt binaries have OCR support enabled, however you will still need to install Tesseract and the language data in order to use it.
+
+Upon buidling, the binary will be located in `target/release/delenix`.
 
 ## Installing
 

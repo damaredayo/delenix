@@ -107,3 +107,16 @@ pub fn handle_simple_upload(config: &config::Config, data: &[u8]) {
         }
     }
 }
+
+#[macro_export]
+macro_rules! handle_error {
+    ($e:expr) => {
+        match $e {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!("Error: {}", e);
+                return;
+            }
+        }
+    };
+}

@@ -1,3 +1,4 @@
+use delenix_lib::handle_error;
 #[cfg(target_os = "linux")]
 use tokio::net::UnixListener;
 
@@ -80,12 +81,12 @@ pub async fn start_ipc(conf: Arc<Mutex<Config>>) {
 
         #[cfg(target_os = "linux")]
         {
-            let listener = UnixListener::bind("/tmp/delenix").unwrap();
+            let listener = handle_error!(UnixListener::bind("/tmp/delenix"));
 
             tracing::info!("Listening on /tmp/delenix");
 
             while let Ok((stream, _)) = listener.accept().await {
-                let localaddr = stream.local_addr().unwrap();
+                let localaddr = handle_error!(stream.local_addr());
                 tracing::info!("Got a connection from {:?}", localaddr);
                 let conf = Arc::clone(&conf);
                 tokio::spawn(async move {
@@ -114,7 +115,7 @@ pub async fn start_ipc(conf: Arc<Mutex<Config>>) {
     //     }
     // });
 
-    server_task.await.unwrap();
+    handle_error!(server_task.await);
     // client_task.await.unwrap();
 }
 
@@ -125,7 +126,7 @@ impl<T> AsyncRW for T where T: AsyncRead + AsyncWrite + Send {}
 async fn handle_client(config: &Mutex<Config>, mut stream: Pin<Box<dyn AsyncRW + Send>>) {
     let mut buffer = [0; 1024];
     loop {
-        let bytes_read = stream.read(&mut buffer).await.unwrap();
+        let bytes_read = handle_error!(stream.read(&mut buffer).await);
         if bytes_read == 0 {
             break;
         }

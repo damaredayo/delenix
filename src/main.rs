@@ -1,6 +1,6 @@
 use std::{thread, time};
 
-use delenix_lib::{clipboard, config, ocr, screenshot, util};
+use delenix_lib::{clipboard, config, handle_error, ocr, screenshot, util};
 use structopt::StructOpt;
 
 mod ipc;
@@ -85,8 +85,9 @@ fn main() {
     }
 
     if opt.upload {
+        tracing::info!("Uploading file");
         if let Some(ref path) = opt.file {
-            let data = std::fs::read(&path).unwrap();
+            let data = handle_error!(std::fs::read(&path));
             util::handle_simple_upload(&config, &data);
         } else {
             tracing::error!("No file specified to upload");
@@ -97,10 +98,10 @@ fn main() {
 
     if opt.file.is_some() && opt.tesseract {
         tracing::info!("Getting text from file");
-        let data = std::fs::read(opt.file.unwrap()).unwrap();
+        let data = handle_error!(std::fs::read(opt.file.unwrap()));
 
-        let text = ocr::ocr(&config.tessdata_path, &data).unwrap();
-        clipboard::copy_text_to_clipboard(&text).unwrap();
+        let text = handle_error!(ocr::ocr(&config.tessdata_path, &data));
+        handle_error!(clipboard::copy_text_to_clipboard(&text));
         return;
     }
 
@@ -108,17 +109,14 @@ fn main() {
         tracing::info!("Taking screenshot");
         let rs = screenshot::select_region(config.freeze_screen).unwrap();
         thread::sleep(time::Duration::from_millis(30)); // this is a hack to fix the screenshot sometimes displaying the dim and selection rectangle
-        let png = config
-            .screenshot(screenshot::ScreenshotType::Region(rs))
-            .unwrap();
-
+        let png = handle_error!(config.screenshot(screenshot::ScreenshotType::Region(rs)));
 
         if opt.tesseract {
             println!("{}", ocr::ocr(&config.tessdata_path, &png).unwrap());
         }
 
         if config.copy_to_clipboard {
-            clipboard::copy_png_to_clipboard(&png).unwrap();
+            handle_error!(clipboard::copy_png_to_clipboard(&png));
         }
 
         if !config.uploaders.is_empty() {

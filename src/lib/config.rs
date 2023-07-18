@@ -12,7 +12,7 @@ pub struct Config {
     pub copy_to_clipboard: bool,
     pub copy_url_to_clipboard: bool,
     pub freeze_screen: bool,
-    pub tessdata_path: Option<String>
+    pub tessdata_path: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
