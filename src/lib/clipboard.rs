@@ -24,7 +24,7 @@ pub fn copy_png_to_clipboard(data: &[u8]) -> Result<(), Box<dyn std::error::Erro
 
 pub fn copy_text_to_clipboard(text: &str) -> Result<(), Box<dyn std::error::Error>> {
     gtk::init()?;
-    let atom = gdk::Atom::intern("CLIPBOARD");
+    let atom = gdk::Atom::intern("PRIMARY");
     let clipboard = gtk::Clipboard::get(&atom);
 
     clipboard.set_text(text);
