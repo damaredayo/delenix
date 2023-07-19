@@ -8,6 +8,7 @@ use regex::Regex;
 use serde_json::Value;
 
 use crate::{
+    clipboard,
     config::{self, Config},
     upload,
 };
@@ -109,7 +110,14 @@ pub fn handle_simple_upload(config: &config::Config, data: &[u8]) {
                 }
 
                 if result.url.is_some() {
-                    tracing::info!("Uploaded URL: {}", result.url.unwrap());
+                    let result_url = result.url.unwrap();
+                    tracing::info!("Uploaded URL: {}", result_url);
+
+                    if config.copy_url_to_clipboard {
+                        if let Err(e) = clipboard::copy_text_to_clipboard(&result_url) {
+                            tracing::error!("Failed to copy URL to clipboard: {}", e);
+                        }
+                    }
                 }
 
                 if result.deletion_url.is_some() {
@@ -161,6 +169,50 @@ fn evaluate_json_path(json: &str, path: &str) -> Result<String, Box<dyn std::err
         .value(&value)
         .str_path(format!("$.{}", path).as_str())?
         .select_as_str()?)
+}
+
+pub fn get_monitor_refresh_rate() -> Result<f64, Box<dyn std::error::Error>> {
+    use gtk::prelude::MonitorExt;
+
+    gtk::init()?;
+
+    if let Some(display) = gdk::Display::default() {
+        if let Some(monitor) = display.default_screen().display().primary_monitor() {
+            return Ok(monitor.refresh_rate() as f64 / 1000.0);
+        }
+    }
+
+    Err("Failed to get monitor refresh rate".into())
+}
+
+pub fn get_monitor_resolution() -> Result<(i32, i32), Box<dyn std::error::Error>> {
+    use gtk::prelude::MonitorExt;
+
+    gtk::init()?;
+
+    if let Some(display) = gdk::Display::default() {
+        if let Some(monitor) = display.default_screen().display().primary_monitor() {
+            let geometry = monitor.geometry();
+            return Ok((geometry.width(), geometry.height()));
+        }
+    }
+
+    Err("Failed to get monitor resolution".into())
+}
+
+pub fn get_work_area_dimensions() -> Result<(i32, i32), Box<dyn std::error::Error>> {
+    use gtk::prelude::MonitorExt;
+
+    gtk::init()?;
+
+    if let Some(display) = gdk::Display::default() {
+        if let Some(monitor) = display.default_screen().display().primary_monitor() {
+            let workarea = monitor.workarea();
+            return Ok((workarea.width(), workarea.height()));
+        }
+    }
+
+    Err("Failed to get work area dimensions".into())
 }
 
 #[macro_export]
