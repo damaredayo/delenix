@@ -8,10 +8,16 @@ use crate::{screenshot, util::make_default_image_path};
 pub struct Config {
     pub uploaders: Vec<Uploader>,
     pub screenshotter: Option<screenshot::custom::Screenshotter>, // If this is None, use the built-in screenshotter I have so graciously provided
-    pub last_index: u32,
+    #[serde(default)]
+    pub last_index: u32, // TODO: change this for the filename stuff, and save it to the config file
+    #[serde(default)]
     pub copy_to_clipboard: bool,
+    #[serde(default)]
     pub copy_url_to_clipboard: bool,
+    #[serde(default)]
     pub freeze_screen: bool,
+    #[serde(default)]
+    pub show_notification: bool,
     pub tessdata_path: Option<String>,
 }
 
@@ -174,6 +180,7 @@ impl Default for Config {
             last_index: 0,
             copy_to_clipboard: true,
             copy_url_to_clipboard: false,
+            show_notification: true,
             freeze_screen: true,
 
             #[cfg(target_os = "linux")]
