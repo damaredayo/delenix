@@ -1,6 +1,6 @@
 [package]
 name = "delenix"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
@@ -22,9 +22,11 @@ tracing-subscriber = "0.3"
 atty = "0.2"
 home = "0.5.5"
 jsonpath_lib = "0.3.0"
+webbrowser = "0.8.10"
 
 gtk = "0.17"
 gdk = "0.17"
+glib = "0.17"
 gdk-pixbuf = "0.17"
 
 tesseract = { version = "0.15.0", optional = true }
